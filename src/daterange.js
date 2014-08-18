@@ -118,7 +118,6 @@ var DateRange = (function () {
 
   function DateRange(o, d2) {
     this.obj = [];
-
     // check to see if supplied object is a valid internal representation
     if (o instanceof Array) {
       var valid = true;
@@ -128,7 +127,7 @@ var DateRange = (function () {
           if (d.length !== 2) {
             valid = false;
           }
-          if (!(isValid(d) && isValid(d))) {
+          if (!(isValid(d[0]) && isValid(d[1]))) {
             valid = false;
           }
         } else {
@@ -330,6 +329,15 @@ var DateRange = (function () {
           fn(date);
         }
       }
+    },
+    contains: function (date) {
+      var res = false;
+      this.eachDay(function (d) {
+        if (iso(date) === d) {
+          res = true;
+        }
+      });
+      return res;
     }
   };
 

@@ -1,4 +1,351 @@
-/* global Platform */
+
+var DateRange = (function () {
+
+  var DAY = 24 * 60 * 60 * 1000;
+
+  function toDate(s) {
+    s = s.split('-');
+    return Date.UTC(s[0],s[1]-1,s[2]);
+  }
+
+  function iso(d) {
+    return d.getUTCFullYear() + '-' +
+           pad2(d.getUTCMonth() + 1) + '-' +
+           pad2(d.getUTCDate());
+  }
+
+  var test = /^\d{4}-\d{2}-\d{2}$/;
+  function isValid(s) {
+    return typeof s === 'string' && test.test(s);
+  }
+
+  function pad2(n) {
+    return ('0' + n.toString()).substr(-2);
+  }
+
+  function diff(a, b) {
+    return Math.round((toDate(a) - toDate(b)) / DAY);
+  }
+
+  function prevDay(d) {
+    d = new Date(toDate(d) - DAY);
+    return iso(d);
+  }
+
+  function nextDay(d) {
+    d = new Date(toDate(d) + DAY);
+    return iso(d);
+  }
+
+
+  /*
+    0)  < > [ ]
+    1)  < [ > ]
+    2)  < [ ] >
+    3)  [ < > ]
+    4)  [ < ] >
+    5)  [ ] < >
+  */
+  function rangeCompare(r1, r2) {
+    if (r1[1] < r2[0]) {
+      return 0;
+    }
+    if (r1[0] < r2[0] && r2[0] <= r1[1] && r1[1] < r2[1]) {
+      return 1;
+    }
+    if (r1[0] <= r2[0] && r2[1] <= r1[1]) {
+      return 2;
+    }
+    if (r2[0] <= r1[0] && r1[1] <= r2[1]) {
+      return 3;
+    }
+    if (r2[0] < r1[0] && r1[0] <= r2[1] && r2[1] < r1[1]) {
+      return 4;
+    }
+    if (r2[1] < r1[0]) {
+      return 5;
+    }
+  }
+
+  // if two adjacent dates/ ranges touch, combine them
+  function merge(o) {
+    for (var i = 0; i < o.length - 1; i++) {
+      var curr = o[i];
+      var next = o[i + 1];
+      var delta;
+      var merged = false;
+      if (curr instanceof Array) {
+        if (next instanceof Array) {
+          if (diff(next[0], curr[1]) === 1) {
+            o[i] = [curr[0], next[1]];
+            merged = true;
+          }
+        } else {
+          if (diff(next, curr[1]) === 1) {
+            o[i] = [curr[0], next];
+            merged = true;
+          }
+        }
+      } else {
+        if (next instanceof Array) {
+          if (diff(next[0], curr) === 1) {
+            o[i] = [curr, next[1]];
+            merged = true;
+          }
+        } else {
+          if (diff(next, curr) === 1) {
+            o[i] = [curr, next];
+            merged = true;
+          }
+        }
+      }
+      if (merged) {
+        o.splice(i+1, 1);
+        i--;
+      }
+    }
+  }
+
+  // flatten ranges that start and end on the same date
+  function dedupe(o) {
+    for (var i = 0; i < o.length; i++) {
+      var d = o[i];
+      if (d instanceof Array && d[0] === d[1]) {
+        o[i] = d[0];
+      }
+    }
+  }
+
+  function DateRange(o, d2) {
+    this.obj = [];
+    // check to see if supplied object is a valid internal representation
+    if (o instanceof Array) {
+      var valid = true;
+      for (var i = 0; i < o.length; i++) {
+        var d = o[i];
+        if (d instanceof Array) {
+          if (d.length !== 2) {
+            valid = false;
+          }
+          if (!(isValid(d[0]) && isValid(d[1]))) {
+            valid = false;
+          }
+        } else {
+          if (!isValid(d)) {
+            valid = false;
+          }
+        }
+      }
+      if (valid) {
+        this.obj = o;
+      }
+    } else {
+      // check to see if single date or range was supplied
+      if (d2) {
+        if (o instanceof Date && d2 instanceof Date) {
+          this.obj = [[iso(o), iso(d2)]];
+        } else {
+          if (isValid(o) && isValid(d2)) {
+            this.obj = [[o, d2]];
+          }
+        }
+      } else {
+        if (o instanceof Date) {
+          this.obj = [iso(o)];
+        }
+        if (isValid(o)) {
+          this.obj = [o];
+        }
+      }
+    }
+  }
+
+  DateRange.prototype = {
+    add: function (o) {
+      if (o instanceof Date) {
+        this._add(iso(o));
+      } else if (o instanceof Array &&
+                 o.length === 2 &&
+                 isValid(o[0]) &&
+                 isValid(o[1])) {
+        this._addRange(o);
+      } else if (typeof o === 'string' && isValid(o)) {
+        this._add(o);
+      }
+    },
+    remove: function (o) {
+      if (o instanceof Date) {
+        this._remove(iso(o));
+      } else if (o instanceof Array &&
+                 o.length === 2 &&
+                 isValid(o[0]) &&
+                 isValid(o[1])) {
+        this._removeRange(o);
+      } else if (typeof o === 'string' && isValid(o)) {
+        this._remove(o);
+      }
+    },
+    _add: function (date) {
+      // insert sorted
+      for (var i = 0; i < this.obj.length; i++) {
+        var d = this.obj[i];
+        if (d instanceof Array) {
+          if (date < d[0]) {
+            break;
+          }
+          // if the value is inside an existing range bail
+          if (d[0] <= date && date <= d[1]) {
+            return;
+          }
+        } else {
+          if (date === d) {
+            return;
+          }
+          if (date < d) {
+            break;
+          }
+        }
+      }
+      this.obj.splice(i, 0, date);
+      merge(this.obj);
+    },
+    _addRange: function (r) {
+      var done = false;
+      for (var i = 0; i < this.obj.length; i++) {
+        var d = this.obj[i];
+        if (d instanceof Array) {
+          var compare = rangeCompare(r, d);
+          if (compare === 0) {
+            this.obj.splice(i, 0, r);
+            done = true;
+            break;
+          }
+          if (compare === 1) {
+            this.obj.splice(i, 1);
+            this._addRange([r[0], d[1]]);
+            return;
+          }
+          if (compare === 2) {
+            this.obj.splice(i, 1);
+            this._addRange([r[0], r[1]]);
+            return;
+          }
+          if (compare === 3) {
+            return;
+          }
+          if (compare === 4) {
+            this.obj.splice(i, 1);
+            this._addRange([d[0], r[1]]);
+            return;
+          }
+        } else {
+          if (r[1] < d) {
+            this.obj.splice(i, 0, r);
+            done = true;
+            break;
+          }
+        }
+      }
+      if (!done) {
+        this.obj.push(r);
+      }
+      merge(this.obj);
+    },
+    _remove: function (date) {
+      for (var i = 0; i < this.obj.length; i++) {
+        var d = this.obj[i];
+        if (d instanceof Array) {
+          if (d[0] <= date && date <= d[1]) {
+            this.obj.splice(i, 1);
+            if (date < d[1]) {
+              this.obj.splice(i, 0, [nextDay(date), d[1]]);
+            }
+            if (date > d[0]) {
+              this.obj.splice(i, 0, [d[0], prevDay(date)]);
+            }
+            break;
+          }
+        } else {
+          if (date === d) {
+            this.obj.splice(i, 1);
+            break;
+          }
+        }
+      }
+      dedupe(this.obj);
+    },
+    _removeRange: function (r) {
+      for (var i = 0; i < this.obj.length; i++) {
+        var d = this.obj[i];
+        if (d instanceof Array) {
+          var compare = rangeCompare(r, d);
+          if (compare === 1) {
+            this.obj[i] = [nextDay(r[1]), d[1]];
+          }
+          if (compare === 2) {
+            this.obj.splice(i, 1);
+            i--;
+          }
+          if (compare === 3) {
+            this.obj[i] = [d[0], prevDay(r[0])];
+            this.obj.splice(i+1, 0, [nextDay(r[1]), d[1]]);
+            break;
+          }
+          if (compare === 4) {
+            this.obj[i] = [d[0], prevDay(r[0])];
+          }
+        } else {
+          if (r[0] <= d && d <= r[1]) {
+            this.obj.splice(i, 1);
+            i--;
+          }
+        }
+      }
+      dedupe(this.obj);
+    },
+    firstDate: function () {
+      var date = this.obj[0];
+      return date instanceof Array ? date[0] : date;
+    },
+    lastDate: function () {
+      var date = this.obj[this.obj.length - 1];
+      return date instanceof Array ? date[1] : date;
+    },
+    flatten: function () {
+      var ret = [];
+      this.eachDay(function (d) {
+        ret.push(d);
+      });
+      return ret;
+    },
+    eachDay: function (fn) {
+      for (var i = 0; i < this.obj.length; i++) {
+        var date = this.obj[i];
+        if (date instanceof Array) {
+          for (var d = date[0]; d <= date[1]; d = nextDay(d)) {
+            fn(d);
+          }
+        } else {
+          fn(date);
+        }
+      }
+    },
+    contains: function (date) {
+      var res = false;
+      this.eachDay(function (d) {
+        if (iso(date) === d) {
+          res = true;
+        }
+      });
+      return res;
+    }
+  };
+
+  return DateRange;
+
+})();
+;
+/* global Platform, DateRange */
 
 (function() {
 
@@ -174,90 +521,6 @@
       }
       return null;
     }
-  }
-
-  /** parseMultiDates: Array/String => (Date/[Date, Date]) array/null
-
-  Given either an array or a JSON string, attempts to parse out the input into
-  the given array format:
-   - An array whose elements fall into one of the following two formats
-    - A Date object representing a single day
-      (if the input uses a string instead, this parser will attempt to
-       parseSingleDate it)
-    - A two element list of Date objects representing the start and
-      end dates of a range (if the inputs use strings instead, the parser
-      will attempt to parseSingleDate them)
-
-  If the input is parseable into this format, return the resulting 2d array
-  Otherwise, return null and console.warn the parsing error
-
-  If given an array that already follows this format, will simply return it
-  **/
-  function parseMultiDates(multiDateStr) {
-    var ranges;
-    if (isArray(multiDateStr)) {
-      ranges = multiDateStr.slice(0); // so that this is nondestructive
-    } else if (isValidDateObj(multiDateStr)) {
-      return [multiDateStr];
-    } else if (typeof(multiDateStr) === "string" && multiDateStr.length > 0) {
-      // check if this is a JSON representing a range of dates
-      try {
-        ranges = JSON.parse(multiDateStr);
-        if (!isArray(ranges)) {
-          return null;
-        }
-      } catch (err) {
-        // check for if this represents a single date
-        var parsedSingle = parseSingleDate(multiDateStr);
-        if (parsedSingle) {
-          return [parsedSingle];
-        } else {
-          return null;
-        }
-      }
-    } else {
-      return null;
-    }
-
-    // go through and replace each unparsed range with its parsed
-    // version (either a singular Date object or a two-item list of
-    // a start Date and an end Date)
-    for (var i = 0; i < ranges.length; i++) {
-      var range = ranges[i];
-
-      if (isValidDateObj(range)) {
-        continue;
-      }
-      // parse out as single date
-      else if (typeof(range) === "string") {
-        var parsedDate = parseSingleDate(range);
-        if (!parsedDate) {
-          return null;
-        }
-        ranges[i] = parsedDate;
-      }
-      // parse out as 2-item list/range of start/end date
-      else if (isArray(range) && range.length === 2) {
-        var parsedStartDate = parseSingleDate(range[0]);
-
-        if (!parsedStartDate) {
-          return null;
-        }
-
-        var parsedEndDate = parseSingleDate(range[1]);
-        if (!parsedEndDate) {
-          return null;
-        }
-
-        if (parsedStartDate.valueOf() > parsedEndDate.valueOf()) {
-          return null;
-        }
-        ranges[i] = [parsedStartDate, parsedEndDate];
-      } else {
-        return null;
-      }
-    }
-    return ranges;
   }
 
   /* from: (Date, number, number, number) => Date
@@ -451,21 +714,6 @@
   }
 
 
-  /** sortRanges: (Date/[Date, Date]) array
-
-  given a list of singular dates / 2-item date range lists (ie: the
-  same format as returned by parseMultipleDates and used by
-  Calendar._chosenRanges), destructively sorts the list to have
-  earlier dates come first
-  **/
-  function sortRanges(ranges) {
-    ranges.sort(function(rangeA, rangeB) {
-      var dateA = (isValidDateObj(rangeA)) ? rangeA : rangeA[0];
-      var dateB = (isValidDateObj(rangeB)) ? rangeB : rangeB[0];
-      return dateA.valueOf() - dateB.valueOf();
-    });
-  }
-
   /** makeControls: (data map) => DOM element
 
   creates and returns the HTML element used to hold the
@@ -522,9 +770,8 @@
     self._span = data.span || 1;
     self._multiple = data.multiple || false;
     // initialize private vars
-    self._viewDate = self._sanitizeViewDate(data.view, data.chosen);
-    self._chosenRanges = self._sanitizeChosenRanges(data.chosen,
-      data.view);
+    self._chosenRanges = new DateRange(data.chosen);
+    self._viewDate = self._sanitizeViewDate(data.view, self.chosen);
     self._firstWeekdayNum = parseIntDec(data.firstWeekdayNum) || 0;
 
     // Note that self._el is the .calendar child div,
@@ -604,7 +851,7 @@
         day.classList.add('badmonth');
       }
 
-      if (dateMatches(cDate, chosen)) {
+      if (chosen.contains(cDate)) {
         day.classList.add(chosenClass);
       }
 
@@ -650,32 +897,19 @@
 
   params:
     viewDate                    the proposed view date to sanitize
-    chosenRanges                (optional) either a single date or a
-                  list of Date/[Date,Date]  ranges
-                  (defaults to this.chosen)
+    chosenRanges                (optional) DateRange
   **/
-  CalendarPrototype._sanitizeViewDate = function(viewDate,
-    chosenRanges) {
-    chosenRanges = (chosenRanges === undefined) ?
-      this.chosen : chosenRanges;
+  CalendarPrototype._sanitizeViewDate = function(viewDate, chosenRanges) {
+    chosenRanges = (chosenRanges === undefined) ? this.chosen : chosenRanges;
     var saneDate;
     // if given a valid viewDate, return it
     if (isValidDateObj(viewDate)) {
       saneDate = viewDate;
     }
-    // otherwise if given a single date for chosenRanges, use it
-    else if (isValidDateObj(chosenRanges)) {
-      saneDate = chosenRanges;
-    }
     // otherwise, if given a valid chosenRanges, return the first date in
     // the range as the view date
-    else if (isArray(chosenRanges) && chosenRanges.length > 0) {
-      var firstRange = chosenRanges[0];
-      if (isValidDateObj(firstRange)) {
-        saneDate = firstRange;
-      } else {
-        saneDate = firstRange[0];
-      }
+    else if (chosenRanges.firstDate && chosenRanges.firstDate()) {
+      saneDate = chosenRanges.firstDate();
     }
     // if not given a valid viewDate or chosenRanges, return the current
     // day as the view date
@@ -683,121 +917,6 @@
       saneDate = TODAY;
     }
     return saneDate;
-  };
-
-  /** _collapseRanges: (Date/[Date,Date]) array => (Date/[Date,Date]) array
-
-  given a list of dates/dateranges, nondestructively sort by ascending date,
-  then collapse/merge any consecutive dates into date ranges and return the
-  resulting list
-  **/
-  function _collapseRanges(ranges) {
-    ranges = ranges.slice(0); // nondestructive sort
-    sortRanges(ranges);
-
-    var collapsed = [];
-    for (var i = 0; i < ranges.length; i++) {
-      var currRange = ranges[i];
-      var prevRange = (collapsed.length > 0) ?
-        collapsed[collapsed.length - 1] : null;
-
-      var currStart, currEnd;
-      var prevStart, prevEnd;
-
-      if (isValidDateObj(currRange)) {
-        currStart = currEnd = currRange;
-      } else {
-        currStart = currRange[0];
-        currEnd = currRange[1];
-      }
-      // collapse extraneous range into a singular date
-      currRange = (dateMatches(currStart, currEnd)) ?
-        currStart : [currStart, currEnd];
-
-      if (isValidDateObj(prevRange)) {
-        prevStart = prevEnd = prevRange;
-      } else if (prevRange) {
-        prevStart = prevRange[0];
-        prevEnd = prevRange[1];
-      } else {
-        // if no previous range, just add the current range to the list
-        collapsed.push(currRange);
-        continue;
-      }
-
-      // if we should collapse range, merge with previous range
-      if (dateMatches(currStart, [prevRange]) ||
-        dateMatches(prevDay(currStart), [prevRange])) {
-
-        var minStart = (prevStart.valueOf() < currStart.valueOf()) ?
-          prevStart : currStart;
-        var maxEnd = (prevEnd.valueOf() > currEnd.valueOf()) ?
-          prevEnd : currEnd;
-
-        var newRange = (dateMatches(minStart, maxEnd)) ?
-          minStart : [minStart, maxEnd];
-        collapsed[collapsed.length - 1] = newRange;
-      } else {
-        // if we don't collapse, just add to list
-        collapsed.push(currRange);
-      }
-    }
-    return collapsed;
-  }
-
-
-  /** Calendar._sanitizeChosenRanges:
-      ((Date/[Date,Date]) array, Date) => (Date/[Date,Date]) array
-
-  given a chosen range list or chosen date and an optional view date
-  return the range list as the chosen date range,
-  depending on what information is given
-
-  if chosenrange is given as a valid date, return it as a singleton list
-  if chosenrange is given as a valid date/daterange list, return it
-
-  otherwise, return the given view date in a singleton list, or an empty list
-  if the view is invalid or chosen is specifically set to nothing
-
-  params:
-    chosenRanges                either a single date or a list of
-                  Date/[Date,Date] ranges to sanitize
-                  if set to null or undefined, this is
-                  interpreted as an empty list
-
-    viewDate                    (optional) the current cursor date
-                  (default = this.view)
-  **/
-  CalendarPrototype._sanitizeChosenRanges = function(chosenRanges,
-    viewDate) {
-    viewDate = (viewDate === undefined) ? this.view : viewDate;
-
-    var cleanRanges;
-    if (isValidDateObj(chosenRanges)) {
-      cleanRanges = [chosenRanges];
-    } else if (isArray(chosenRanges)) {
-      cleanRanges = chosenRanges;
-    } else if (chosenRanges === null || chosenRanges === undefined ||
-      !viewDate) {
-      cleanRanges = [];
-    } else {
-      cleanRanges = [viewDate];
-    }
-
-    var collapsedRanges = _collapseRanges(cleanRanges);
-    // if multiple is not active, only get the first date of the chosen
-    // ranges for the sanitize range list
-    if ((!this.multiple) && collapsedRanges.length > 0) {
-      var firstRange = collapsedRanges[0];
-
-      if (isValidDateObj(firstRange)) {
-        return [firstRange];
-      } else {
-        return [firstRange[0]];
-      }
-    } else {
-      return collapsedRanges;
-    }
   };
 
 
@@ -809,16 +928,18 @@
   if append is truthy, adds the given date to the stored list of date ranges
   **/
   CalendarPrototype.addDate = function(dateObj, append) {
-    if (isValidDateObj(dateObj)) {
-      if (append) {
-        this.chosen.push(dateObj);
-        // trigger setter
-        this.chosen = this.chosen;
-      } else {
-        this.chosen = [dateObj];
-      }
+    if (!isValidDateObj(dateObj)) {
+      return;
+    }
+    if (append) {
+      this.chosen.add(dateObj);
+      // trigger setter
+      this.chosen = this.chosen;
+    } else {
+      this.chosen = new DateRange(dateObj);
     }
   };
+
 
   /** Calendar.removeDate: (Date)
 
@@ -828,36 +949,7 @@
     if (!isValidDateObj(dateObj)) {
       return;
     }
-    // search stored chosen ranges for the given date to remove
-    var ranges = this.chosen.slice(0);
-    for (var i = 0; i < ranges.length; i++) {
-      var range = ranges[i];
-      if (dateMatches(dateObj, [range])) {
-        // remove the item the date was found in
-        ranges.splice(i, 1);
-
-        // if the date was located in a 2-item date range, split the
-        // range into separate ranges/dates as needed
-        if (isArray(range)) {
-          var rangeStart = range[0];
-          var rangeEnd = range[1];
-          var prevDate = prevDay(dateObj);
-          var nextDate = nextDay(dateObj);
-
-          // if we should keep the preceding section of the range
-          if (dateMatches(prevDate, [range])) {
-            ranges.push([rangeStart, prevDate]);
-          }
-
-          // if we should keep the succeeding section of the range
-          if (dateMatches(nextDate, [range])) {
-            ranges.push([nextDate, rangeEnd]);
-          }
-        }
-        this.chosen = _collapseRanges(ranges);
-        break;
-      }
-    }
+    this.chosen.remove(dateObj);
   };
 
   /** Calendar.hasChosenDate: (Date) => Boolean
@@ -865,7 +957,7 @@
   returns true if the given date is one of the dates stored as chosen
   **/
   CalendarPrototype.hasChosenDate = function(dateObj) {
-    return dateMatches(dateObj, this._chosenRanges);
+    return this.chosen.contains(dateObj);
   };
 
 
@@ -938,7 +1030,7 @@
         if (!parsedDate) {
           continue;
         } else {
-          if (dateMatches(parsedDate, this._chosenRanges)) {
+          if (this._chosenRanges.contains(parsedDate)) {
             day.classList.add(chosenClass);
           } else {
             day.classList.remove(chosenClass);
@@ -1013,7 +1105,9 @@
       },
       set: function(multi) {
         this._multiple = multi;
-        this.chosen = this._sanitizeChosenRanges(this.chosen);
+        if (!this.multiple) {
+          this.chosen = this.chosen.firstDate();
+        }
         this.render(true);
       }
     },
@@ -1042,7 +1136,6 @@
     the cursor date to center the calendar display on
     **/
     "view": {
-      attribute: {},
       get: function() {
         return this._viewDate;
       },
@@ -1058,19 +1151,16 @@
 
     /** Calendar.chosen: (read-writeable)
 
-    the Date/[Date,Date] array representing the dates currently marked
+    the DateRange object representing the dates currently marked
     as chosen
 
-    setter can take a date or a Date/[Date,Date] array
-    (null is interpreted as an empty array)
     **/
     "chosen": {
       get: function() {
         return this._chosenRanges;
       },
       set: function(newChosenRanges) {
-        this._chosenRanges =
-          this._sanitizeChosenRanges(newChosenRanges);
+        this._chosenRanges = newChosenRanges;
         this.render(true);
       }
     },
@@ -1118,23 +1208,7 @@
     **/
     "chosenString": {
       get: function() {
-        if (this.multiple) {
-          var isoDates = this.chosen.slice(0);
-
-          for (var i = 0; i < isoDates.length; i++) {
-            var range = isoDates[i];
-            if (isValidDateObj(range)) {
-              isoDates[i] = iso(range);
-            } else {
-              isoDates[i] = [iso(range[0]), iso(range[1])];
-            }
-          }
-          return JSON.stringify(isoDates);
-        } else if (this.chosen.length > 0) {
-          return iso(this.chosen[0]);
-        } else {
-          return "";
-        }
+        return JSON.stringify(this.chosen.obj);
       }
     },
 
@@ -1316,14 +1390,6 @@
     }
   }
 
-  /* _pointIsInRect: (Number, Number, {left: number, top: number,
-                     right: number, bottom: number})
-  */
-  function _pointIsInRect(x, y, rect) {
-    return (rect.left <= x && x <= rect.right &&
-      rect.top <= y && y <= rect.bottom);
-  }
-
   // added on the body to delegate dragends to all brick-calendars
   var DOC_MOUSEUP_LISTENER = null;
 
@@ -1365,12 +1431,28 @@
       }
     }
 
+    // the chosen attribute contains a single date or a
+    // date range string
+    // eg
+    // '2014-08-17'
+    // '["2014-08-17"]'
+    // '["2014-08-17", "2014-08-17"]'
+    var chosen;
+    if (this.hasAttribute("chosen")) {
+      var chosenAttr = this.getAttribute("chosen");
+      // single date
+      if (chosenAttr.indexOf("[") === -1) {
+        chosen = parseSingleDate(chosenAttr);
+      } else {
+        chosen = JSON.parse(chosenAttr);
+      }
+    }
+
     // add calendar before inserting the template
-    var chosenRange = this.getAttribute("chosen");
     this.ns.calObj = new Calendar({
       span: this.getAttribute("span"),
       view: parseSingleDate(this.getAttribute("view")),
-      chosen: parseMultiDates(chosenRange),
+      chosen: chosen,
       multiple: this.hasAttribute("multiple"),
       firstWeekdayNum: this.getAttribute("first-weekday-num")
     });
@@ -1418,7 +1500,6 @@
     this.addEventListener("click", this.ns.listeners.clickPrev);
 
     this.ns.listeners.pointerdownDay = delegate(".day", function(e) {
-      // TDOD: FIX THIS
       // prevent firing on right click
       if (e.button && e.button !== LEFT_MOUSE_BTN) {
         return;
@@ -1479,7 +1560,7 @@
 
     this.ns.listeners.datetoggleoff = function(e) {
       var xCalendar = this;
-      xCalendar.toggleDateOn(e.detail.date, xCalendar.multiple);
+      xCalendar.toggleDateOff(e.detail.date, xCalendar.multiple);
     };
     this.addEventListener("datetoggleoff", this.ns.listeners.datetoggleoff);
 
@@ -1510,6 +1591,8 @@
     }
   };
 
+  // TODO: handle attribute changes!!
+  
   var attrs = {
     'attr': function(oldVal, newVal) {
 
@@ -1653,19 +1736,10 @@
         }
       },
       set: function(newVal) {
-        var parsedDateRanges = (this.multiple) ?
-          parseMultiDates(newVal) :
-          parseSingleDate(newVal);
-        if (parsedDateRanges) {
-          this.ns.calObj.chosen = parsedDateRanges;
-        } else {
-          this.ns.calObj.chosen = null;
-        }
-
+        this.ns.calObj.chosen = newVal;
         if (this.ns.calObj.chosenString) {
           // override attribute with auto-generated string
-          this.setAttribute("chosen",
-            this.ns.calObj.chosenString);
+          this.setAttribute("chosen", this.ns.calObj.chosenString);
         } else {
           this.removeAttribute("chosen");
         }
@@ -1777,6 +1851,5 @@
       prototype: BrickCalendarElementPrototype
     });
   }
-
 
 })();
