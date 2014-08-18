@@ -425,6 +425,7 @@
     // initialize private vars
     self._chosenRanges = new DateRange(data.chosen);
     self._viewDate = self._sanitizeViewDate(data.view, self.chosen);
+    console.log(self._viewDate);
     self._firstWeekdayNum = parseIntDec(data.firstWeekdayNum) || 0;
 
     // Note that self._el is the .calendar child div,
@@ -562,7 +563,7 @@
     // otherwise, if given a valid chosenRanges, return the first date in
     // the range as the view date
     else if (chosenRanges.firstDate && chosenRanges.firstDate()) {
-      saneDate = chosenRanges.firstDate();
+      saneDate = parseSingleDate(chosenRanges.firstDate());
     }
     // if not given a valid viewDate or chosenRanges, return the current
     // day as the view date
@@ -630,9 +631,8 @@
     var endDate = (excludeBadMonths) ? findLast(this.lastVisibleMonth) :
       this.lastVisibleDate;
 
-    return dateMatches(dateObj, [
-      [startDate, endDate]
-    ]);
+    console.log('hasVisible');
+    return DateRange(startDate, endDate).contains(dateObj);
   };
 
 
@@ -790,6 +790,7 @@
     **/
     "view": {
       get: function() {
+        console.log(this._viewDate);
         return this._viewDate;
       },
       set: function(rawViewDate) {
@@ -1096,8 +1097,10 @@
       // single date
       if (chosenAttr.indexOf("[") === -1) {
         chosen = parseSingleDate(chosenAttr);
+        console.log("a",chosen)
       } else {
         chosen = JSON.parse(chosenAttr);
+        console.log("b",chosen)
       }
     }
 
