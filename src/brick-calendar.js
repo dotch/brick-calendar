@@ -508,7 +508,7 @@
         day.classList.add(chosenClass);
       }
 
-      if (dateMatches(cDate, TODAY)) {
+      if (iso(cDate) === iso(TODAY)) {
         day.classList.add("today");
       }
 
@@ -689,7 +689,7 @@
             day.classList.remove(chosenClass);
           }
 
-          if (dateMatches(parsedDate, [TODAY])) {
+          if (iso(parsedDate) === iso(TODAY)) {
             day.classList.add("today");
           } else {
             day.classList.remove("today");
@@ -1245,7 +1245,7 @@
   };
 
   // TODO: handle attribute changes!!
-  
+
   var attrs = {
     'attr': function(oldVal, newVal) {
 
@@ -1369,24 +1369,7 @@
     // of dates/dateranges
     'chosen': {
       get: function() {
-        var chosenRanges = this.ns.calObj.chosen;
-        // return a single date if multiple selection not allowed
-        if (!this.multiple) {
-          if (chosenRanges.length > 0) {
-            var firstRange = chosenRanges[0];
-            if (isValidDateObj(firstRange)) {
-              return firstRange;
-            } else {
-              return firstRange[0];
-            }
-          } else {
-            return null;
-          }
-        }
-        // otherwise return the entire selection list
-        else {
-          return this.ns.calObj.chosen;
-        }
+        return this.ns.calObj.chosen;
       },
       set: function(newVal) {
         this.ns.calObj.chosen = newVal;
