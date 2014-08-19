@@ -176,6 +176,34 @@
     }
   }
 
+  function parseMultiDates(multiDateStr) {
+    var ranges;
+    if (isArray(multiDateStr)) {
+      ranges = multiDateStr.slice(0); // so that this is nondestructive
+    } else if (isValidDateObj(multiDateStr)) {
+      return multiDateStr;
+    } else if (typeof(multiDateStr) === "string" && multiDateStr.length > 0) {
+      // check if this is a JSON representing a range of dates
+      try {
+        ranges = JSON.parse(multiDateStr);
+        if (!isArray(ranges)) {
+          return null;
+        }
+      } catch (err) {
+        // check for if this represents a single date
+        var parsedSingle = parseSingleDate(multiDateStr);
+        if (parsedSingle) {
+          return parsedSingle;
+        } else {
+          return null;
+        }
+      }
+    } else {
+      return null;
+    }
+    return ranges;
+  }
+
   /* from: (Date, number, number, number) => Date
 
   Create a new date based on the provided date, but with any given
@@ -425,7 +453,6 @@
     // initialize private vars
     self._chosenRanges = new DateRange(data.chosen);
     self._viewDate = self._sanitizeViewDate(data.view, self.chosen);
-    console.log(self._viewDate);
     self._firstWeekdayNum = parseIntDec(data.firstWeekdayNum) || 0;
 
     // Note that self._el is the .calendar child div,
@@ -631,8 +658,7 @@
     var endDate = (excludeBadMonths) ? findLast(this.lastVisibleMonth) :
       this.lastVisibleDate;
 
-    console.log('hasVisible');
-    return DateRange(startDate, endDate).contains(dateObj);
+    return new DateRange(startDate, endDate).contains(dateObj);
   };
 
 
@@ -790,7 +816,6 @@
     **/
     "view": {
       get: function() {
-        console.log(this._viewDate);
         return this._viewDate;
       },
       set: function(rawViewDate) {
@@ -1084,31 +1109,11 @@
         style.remove();
       }
     }
-
-    // the chosen attribute contains a single date or a
-    // date range string
-    // eg
-    // '2014-08-17'
-    // '["2014-08-17"]'
-    // '["2014-08-17", "2014-08-17"]'
-    var chosen;
-    if (this.hasAttribute("chosen")) {
-      var chosenAttr = this.getAttribute("chosen");
-      // single date
-      if (chosenAttr.indexOf("[") === -1) {
-        chosen = parseSingleDate(chosenAttr);
-        console.log("a",chosen)
-      } else {
-        chosen = JSON.parse(chosenAttr);
-        console.log("b",chosen)
-      }
-    }
-
     // add calendar before inserting the template
     this.ns.calObj = new Calendar({
       span: this.getAttribute("span"),
       view: parseSingleDate(this.getAttribute("view")),
-      chosen: chosen,
+      chosen: parseMultiDates(this.getAttribute("chosen")),
       multiple: this.hasAttribute("multiple"),
       firstWeekdayNum: this.getAttribute("first-weekday-num")
     });

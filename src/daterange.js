@@ -117,6 +117,7 @@ var DateRange = (function () {
   }
 
   function DateRange(o, d2) {
+    console.log("new range", o, d2);
     this.obj = [];
     // check to see if supplied object is a valid internal representation
     if (o instanceof Array) {
@@ -305,6 +306,8 @@ var DateRange = (function () {
     },
     firstDate: function () {
       var date = this.obj[0];
+      console.log("first",this.obj);
+      console.log("first",date instanceof Array ? date[1] : date);
       return date instanceof Array ? date[0] : date;
     },
     lastDate: function () {
