@@ -116,7 +116,6 @@ var DateRange = (function () {
   }
 
   function DateRange(o, d2) {
-    console.log("new range", o, d2);
     this.obj = [];
     // check to see if supplied object is a valid internal representation
     if (o instanceof Array) {
@@ -158,7 +157,6 @@ var DateRange = (function () {
         }
       }
     }
-    console.log(this.obj);
   }
 
   DateRange.prototype = {
