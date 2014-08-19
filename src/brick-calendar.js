@@ -1,3 +1,7 @@
+// TODO eventually add more DateObjects to outward facing functionality again,
+// instead of current ISO-Date-Strings
+// also need lots of testing.
+
 /* global Platform, DateRange */
 
 (function() {
@@ -585,24 +589,24 @@
   };
 
 
-  // /** Calendar.hasVisibleDate: (isoDate, Boolean)
-  //
-  // if excludeBadMonths is falsy/not given, return true if the given date is
-  // at all visible in the calendar element, including the remnants of
-  // months visible on the edges of the current span
-  //
-  // if excludeBadMonths is truthy, return true if the given date is contained
-  // within the current visible span of dates, ignoring those in months not
-  // actually within the span
-  // **/
-  // CalendarPrototype.hasVisibleDate = function(isoDate, excludeBadMonths) {
-  //   var startDate = (excludeBadMonths) ? this.firstVisibleMonth :
-  //     this.firstVisibleDate;
-  //   var endDate = (excludeBadMonths) ? findLast(this.lastVisibleMonth) :
-  //     this.lastVisibleDate;
-  //
-  //   return new DateRange(startDate, endDate).contains(dateObj);
-  // };
+  /** Calendar.hasVisibleDate: (isoDate, Boolean)
+
+  if excludeBadMonths is falsy/not given, return true if the given date is
+  at all visible in the calendar element, including the remnants of
+  months visible on the edges of the current span
+
+  if excludeBadMonths is truthy, return true if the given date is contained
+  within the current visible span of dates, ignoring those in months not
+  actually within the span
+  **/
+  CalendarPrototype.hasVisibleDate = function(isoDate, excludeBadMonths) {
+    var startDate = (excludeBadMonths) ? this.firstVisibleMonth :
+      this.firstVisibleDate;
+    var endDate = (excludeBadMonths) ? findLast(this.lastVisibleMonth) :
+      this.lastVisibleDate;
+
+    return new DateRange(startDate, endDate).contains(dateObj);
+  };
 
 
   /** Calendar.render: (Boolean)
