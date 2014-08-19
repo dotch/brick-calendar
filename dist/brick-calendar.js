@@ -72,7 +72,6 @@ var DateRange = (function () {
     for (var i = 0; i < o.length - 1; i++) {
       var curr = o[i];
       var next = o[i + 1];
-      var delta;
       var merged = false;
       if (curr instanceof Array) {
         if (next instanceof Array) {
@@ -159,6 +158,7 @@ var DateRange = (function () {
         }
       }
     }
+    console.log(this.obj);
   }
 
   DateRange.prototype = {
@@ -306,8 +306,6 @@ var DateRange = (function () {
     },
     firstDate: function () {
       var date = this.obj[0];
-      console.log("first",this.obj);
-      console.log("first",date instanceof Array ? date[1] : date);
       return date instanceof Array ? date[0] : date;
     },
     lastDate: function () {
@@ -334,6 +332,7 @@ var DateRange = (function () {
       }
     },
     contains: function (date) {
+      // console.log(date, iso(date));
       var res = false;
       this.eachDay(function (d) {
         if (iso(date) === d) {
@@ -528,11 +527,7 @@ var DateRange = (function () {
 
   function parseMultiDates(multiDateStr) {
     var ranges;
-    if (isArray(multiDateStr)) {
-      ranges = multiDateStr.slice(0); // so that this is nondestructive
-    } else if (isValidDateObj(multiDateStr)) {
-      return multiDateStr;
-    } else if (typeof(multiDateStr) === "string" && multiDateStr.length > 0) {
+    if (typeof(multiDateStr) === "string" && multiDateStr.length > 0) {
       // check if this is a JSON representing a range of dates
       try {
         ranges = JSON.parse(multiDateStr);
@@ -543,7 +538,7 @@ var DateRange = (function () {
         // check for if this represents a single date
         var parsedSingle = parseSingleDate(multiDateStr);
         if (parsedSingle) {
-          return parsedSingle;
+          return multiDateStr;
         } else {
           return null;
         }
@@ -883,6 +878,7 @@ var DateRange = (function () {
       }
 
       if (chosen.contains(cDate)) {
+        console.log(cDate, chosen);
         day.classList.add(chosenClass);
       }
 
@@ -1059,7 +1055,9 @@ var DateRange = (function () {
         if (!parsedDate) {
           continue;
         } else {
+          console.log("pd", parsedDate);
           if (this._chosenRanges.contains(parsedDate)) {
+
             day.classList.add(chosenClass);
           } else {
             day.classList.remove(chosenClass);

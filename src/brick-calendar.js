@@ -178,11 +178,7 @@
 
   function parseMultiDates(multiDateStr) {
     var ranges;
-    if (isArray(multiDateStr)) {
-      ranges = multiDateStr.slice(0); // so that this is nondestructive
-    } else if (isValidDateObj(multiDateStr)) {
-      return multiDateStr;
-    } else if (typeof(multiDateStr) === "string" && multiDateStr.length > 0) {
+    if (typeof(multiDateStr) === "string" && multiDateStr.length > 0) {
       // check if this is a JSON representing a range of dates
       try {
         ranges = JSON.parse(multiDateStr);
@@ -193,7 +189,7 @@
         // check for if this represents a single date
         var parsedSingle = parseSingleDate(multiDateStr);
         if (parsedSingle) {
-          return parsedSingle;
+          return multiDateStr;
         } else {
           return null;
         }
@@ -533,6 +529,7 @@
       }
 
       if (chosen.contains(cDate)) {
+        console.log(cDate, chosen);
         day.classList.add(chosenClass);
       }
 
@@ -709,7 +706,9 @@
         if (!parsedDate) {
           continue;
         } else {
+          console.log("pd", parsedDate);
           if (this._chosenRanges.contains(parsedDate)) {
+
             day.classList.add(chosenClass);
           } else {
             day.classList.remove(chosenClass);
