@@ -163,9 +163,7 @@ var DateRange = (function () {
 
   DateRange.prototype = {
     add: function (o) {
-      if (o instanceof Date) {
-        this._add(iso(o));
-      } else if (o instanceof Array &&
+      if (o instanceof Array &&
                  o.length === 2 &&
                  isValid(o[0]) &&
                  isValid(o[1])) {
@@ -175,9 +173,7 @@ var DateRange = (function () {
       }
     },
     remove: function (o) {
-      if (o instanceof Date) {
-        this._remove(iso(o));
-      } else if (o instanceof Array &&
+      if (o instanceof Array &&
                  o.length === 2 &&
                  isValid(o[0]) &&
                  isValid(o[1])) {
@@ -331,11 +327,10 @@ var DateRange = (function () {
         }
       }
     },
-    contains: function (date) {
-      // console.log(date, iso(date));
+    contains: function (isoDate) {
       var res = false;
       this.eachDay(function (d) {
-        if (iso(date) === d) {
+        if (isoDate === d) {
           res = true;
         }
       });

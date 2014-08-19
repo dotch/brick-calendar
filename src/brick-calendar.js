@@ -344,53 +344,6 @@
     return relOffset(d, 0, 0, -1);
   }
 
-  /** dateMatches: (Date, (Date/[Date, Date]) array) => Boolean
-
-  Check whether Date `d` is in the list of Date/Date ranges in `matches`.
-
-  If given a single date to check, will check if the two dates fall on the
-  same date
-
-  If given an array of Dates/2-item Dateranges (ie: the same format returned
-  by parseMultipleDates and used for Calendar._chosenRanges)
-
-  params:
-    d                   the date to compare
-    matches             if given as a singular date, will check if d is
-              in the same date
-              Otherwise,
-  **/
-  function dateMatches(d, matches) {
-    if (!matches) {
-      return;
-    }
-    matches = (matches.length === undefined) ? [matches] : matches;
-    var foundMatch = false;
-    matches.forEach(function(match) {
-      if (match.length === 2) {
-        if (dateInRange(match[0], match[1], d)) {
-          foundMatch = true;
-        }
-      } else {
-        if (iso(match) === iso(d)) {
-          foundMatch = true;
-        }
-      }
-    });
-    return foundMatch;
-  }
-
-  /** dateInRange: (Date, Date, Date) => Boolean
-
-  returns true if the date of the given d date (without time information)
-  is in between the start and end days
-  **/
-  function dateInRange(start, end, d) {
-    // convert to strings for easier comparison
-    return iso(start) <= iso(d) && iso(d) <= iso(end);
-  }
-
-
   /** makeControls: (data map) => DOM element
 
   creates and returns the HTML element used to hold the
@@ -528,8 +481,7 @@
         day.classList.add('badmonth');
       }
 
-      if (chosen.contains(cDate)) {
-        console.log(cDate, chosen);
+      if (chosen.contains(iso(cDate))) {
         day.classList.add(chosenClass);
       }
 
@@ -605,16 +557,13 @@
 
   if append is truthy, adds the given date to the stored list of date ranges
   **/
-  CalendarPrototype.addDate = function(dateObj, append) {
-    if (!isValidDateObj(dateObj)) {
-      return;
-    }
+  CalendarPrototype.addDate = function(isoDate, append) {
     if (append) {
-      this.chosen.add(dateObj);
+      this.chosen.add(isoDate);
       // trigger setter
       this.chosen = this.chosen;
     } else {
-      this.chosen = new DateRange(dateObj);
+      this.chosen = new DateRange(isoDate);
     }
   };
 
@@ -623,40 +572,37 @@
 
   removes the given date from the Calendar's stored chosen date ranges
   **/
-  CalendarPrototype.removeDate = function(dateObj) {
-    if (!isValidDateObj(dateObj)) {
-      return;
-    }
-    this.chosen.remove(dateObj);
+  CalendarPrototype.removeDate = function(isoDate) {
+    this.chosen.remove(isoDate);
   };
 
-  /** Calendar.hasChosenDate: (Date) => Boolean
+  /** Calendar.hasChosenDate: (isoDate) => Boolean
 
   returns true if the given date is one of the dates stored as chosen
   **/
-  CalendarPrototype.hasChosenDate = function(dateObj) {
-    return this.chosen.contains(dateObj);
+  CalendarPrototype.hasChosenDate = function(isoDate) {
+    return this.chosen.contains(isoDate);
   };
 
 
-  /** Calendar.hasVisibleDate: (Date, Boolean)
-
-  if excludeBadMonths is falsy/not given, return true if the given date is
-  at all visible in the calendar element, including the remnants of
-  months visible on the edges of the current span
-
-  if excludeBadMonths is truthy, return true if the given date is contained
-  within the current visible span of dates, ignoring those in months not
-  actually within the span
-  **/
-  CalendarPrototype.hasVisibleDate = function(dateObj, excludeBadMonths) {
-    var startDate = (excludeBadMonths) ? this.firstVisibleMonth :
-      this.firstVisibleDate;
-    var endDate = (excludeBadMonths) ? findLast(this.lastVisibleMonth) :
-      this.lastVisibleDate;
-
-    return new DateRange(startDate, endDate).contains(dateObj);
-  };
+  // /** Calendar.hasVisibleDate: (isoDate, Boolean)
+  //
+  // if excludeBadMonths is falsy/not given, return true if the given date is
+  // at all visible in the calendar element, including the remnants of
+  // months visible on the edges of the current span
+  //
+  // if excludeBadMonths is truthy, return true if the given date is contained
+  // within the current visible span of dates, ignoring those in months not
+  // actually within the span
+  // **/
+  // CalendarPrototype.hasVisibleDate = function(isoDate, excludeBadMonths) {
+  //   var startDate = (excludeBadMonths) ? this.firstVisibleMonth :
+  //     this.firstVisibleDate;
+  //   var endDate = (excludeBadMonths) ? findLast(this.lastVisibleMonth) :
+  //     this.lastVisibleDate;
+  //
+  //   return new DateRange(startDate, endDate).contains(dateObj);
+  // };
 
 
   /** Calendar.render: (Boolean)
@@ -706,9 +652,7 @@
         if (!parsedDate) {
           continue;
         } else {
-          console.log("pd", parsedDate);
-          if (this._chosenRanges.contains(parsedDate)) {
-
+          if (this._chosenRanges.contains(iso(parsedDate))) {
             day.classList.add(chosenClass);
           } else {
             day.classList.remove(chosenClass);
@@ -978,7 +922,6 @@
   **/
   function _onDragStart(xCalendar, day) {
     var isoDate = day.getAttribute("data-date");
-    var dateObj = parseSingleDate(isoDate);
     var toggleEventName;
     if (day.classList.contains(chosenClass)) {
       xCalendar.ns.dragType = DRAG_REMOVE;
@@ -992,10 +935,7 @@
 
     if (!xCalendar.noToggle) {
       xCalendar.dispatchEvent(new CustomEvent(toggleEventName, {
-        detail: {
-          date: dateObj,
-          iso: isoDate
-        },
+        detail: isoDate,
         bubbles: true
       }));
     }
@@ -1013,7 +953,6 @@
   **/
   function _onDragMove(xCalendar, day) {
     var isoDate = day.getAttribute("data-date");
-    var dateObj = parseSingleDate(isoDate);
     if (day !== xCalendar.ns.dragStartEl) {
       xCalendar.ns.dragAllowTap = false;
     }
@@ -1024,10 +963,7 @@
       if (xCalendar.ns.dragType === DRAG_ADD &&
         !(day.classList.contains(chosenClass))) {
         xCalendar.dispatchEvent(new CustomEvent("datetoggleon", {
-          detail: {
-            date: dateObj,
-            iso: isoDate
-          },
+          detail: isoDate,
           bubbles: true
         }));
       }
@@ -1036,10 +972,7 @@
       else if (xCalendar.ns.dragType === DRAG_REMOVE &&
         day.classList.contains(chosenClass)) {
         xCalendar.dispatchEvent(new CustomEvent("datetoggleoff", {
-          detail: {
-            date: dateObj,
-            iso: isoDate
-          }
+          detail: isoDate
         }));
       }
     }
@@ -1200,13 +1133,9 @@
       }
       var day = this;
       var isoDate = day.getAttribute("data-date");
-      var dateObj = parseSingleDate(isoDate);
 
       xCalendar.dispatchEvent(new CustomEvent("datetap", {
-        detail: {
-          date: dateObj,
-          iso: isoDate
-        },
+        detail: isoDate,
         bubbles: true
       }));
     });
@@ -1214,13 +1143,13 @@
 
     this.ns.listeners.datetoggleon = function(e) {
       var xCalendar = this;
-      xCalendar.toggleDateOn(e.detail.date, xCalendar.multiple);
+      xCalendar.toggleDateOn(e.detail, xCalendar.multiple);
     };
     this.addEventListener("datetoggleon", this.ns.listeners.datetoggleon);
 
     this.ns.listeners.datetoggleoff = function(e) {
       var xCalendar = this;
-      xCalendar.toggleDateOff(e.detail.date, xCalendar.multiple);
+      xCalendar.toggleDateOff(e.detail, xCalendar.multiple);
     };
     this.addEventListener("datetoggleoff", this.ns.listeners.datetoggleoff);
 
@@ -1284,16 +1213,16 @@
   // chosen dates if append is falsy or not given, or adding to the
   // list of chosen dates, if append is truthy
   // also updates the chosen attribute of the calendar
-  BrickCalendarElementPrototype.toggleDateOn = function(newDateObj, append) {
-    this.ns.calObj.addDate(newDateObj, append);
+  BrickCalendarElementPrototype.toggleDateOn = function(newIsoDate, append) {
+    this.ns.calObj.addDate(newIsoDate, append);
     // trigger setter
     this.chosen = this.chosen;
   };
 
   // removes the given date from the chosen list
   // also updates the chosen attribute of the calendar
-  BrickCalendarElementPrototype.toggleDateOff = function(dateObj) {
-    this.ns.calObj.removeDate(dateObj);
+  BrickCalendarElementPrototype.toggleDateOff = function(isoDate) {
+    this.ns.calObj.removeDate(isoDate);
     // trigger setter
     this.chosen = this.chosen;
   };
@@ -1302,21 +1231,20 @@
   // 'appendIfAdd' specifies how the date is added to the list of
   // chosen dates if toggled on
   // also updates the chosen attribute of the calendar
-  BrickCalendarElementPrototype.toggleDate = function(dateObj, appendIfAdd) {
-    if (this.ns.calObj.hasChosenDate(dateObj)) {
-      this.toggleDateOff(dateObj);
+  BrickCalendarElementPrototype.toggleDate = function(isoDate, appendIfAdd) {
+    if (this.ns.calObj.hasChosenDate(isoDate)) {
+      this.toggleDateOff(isoDate);
     } else {
-      this.toggleDateOn(dateObj, appendIfAdd);
+      this.toggleDateOn(isoDate, appendIfAdd);
     }
   };
 
-  // returns whether or not the given date is in the visible
-  // calendar display, optionally ignoring dates outside of the
-  // month span
-  BrickCalendarElementPrototype.hasVisibleDate = function(dateObj, excludeBadMonths) {
-    return this.ns.calObj.hasVisibleDate(dateObj,
-      excludeBadMonths);
-  };
+  // // returns whether or not the given date is in the visible
+  // // calendar display, optionally ignoring dates outside of the
+  // // month span
+  // BrickCalendarElementPrototype.hasVisibleDate = function(isoDate, excludeBadMonths) {
+  //   return this.ns.calObj.hasVisibleDate(isoDate, excludeBadMonths);
+  // };
 
   // Property handlers
 
@@ -1372,8 +1300,7 @@
       }
     },
     // handles which dates are marked as chosen in the brick-calendar
-    // setter can take a parseable string, a singular date, or a range
-    // of dates/dateranges
+    // setter can take a parseable dateRange String
     'chosen': {
       get: function() {
         return this.ns.calObj.chosen;
